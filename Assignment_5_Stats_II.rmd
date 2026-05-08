@@ -1,0 +1,16 @@
+---
+title: "Assignment_5_Stats_II_Group_22"
+author:
+- "Maik David Klaiber (22-482-426)"
+- "Jonas Weber (24-621-484)"
+- "Yann Rochaix (24-622-276)"
+date: "`r format(Sys.Date(), '%d.%m.%Y')`"
+output: html_document
+---
+
+# Part I
+
+## Exercise 1
+
+### a) Interpretation of coefficients
+
