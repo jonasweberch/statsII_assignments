@@ -8,9 +8,368 @@ date: "`r format(Sys.Date(), '%d.%m.%Y')`"
 output: html_document
 ---
 
-# Part I
+# Data cleaning procedure
 
-## Exercise 1
+The same data cleaning procedure was used as in Exercise 5.
 
-### a) Interpretation of coefficients
+```{r setup, include=FALSE}
+
+# Load required packages
+library(skimr)
+library(dplyr)
+library(stargazer)
+library(lfe)
+library(marginaleffects)
+
+```
+
+```{r read csv, include=TRUE}
+# Load the data set
+df <- read.csv("education_income-3.csv")
+
+```
+
+```{r data cleaning, include=TRUE, results='hide'}
+# Summarize the data
+skim(df)
+
+# Cleaning
+
+df <- df %>%
+  
+# Replace invalid values with NA
+  
+  mutate(
+    college = ifelse(college == -1, NA, college),
+    
+    income = ifelse(income == -9999999, NA, income),
+    hhincome = ifelse(hhincome == -9999999, NA, hhincome),
+    
+    # Create new variables
+    white = race,
+    
+    low_income = ifelse(
+      hhincome < quantile(hhincome, 0.5, na.rm = TRUE),
+      1,
+      0
+    )
+  ) %>%
+  
+# Remove old variable
+  select(-race)
+
+# Summarize cleaned data
+skim(df)
+```
+
+# Question 1: Descriptive Analysis
+
+```{r descriptive statistics, include=TRUE}
+
+
+income_college <- 1000 * mean(df[df$college==1,'income'], na.rm = TRUE)
+income_noCollege <- 1000 * mean(df[df$college==0,'income'], na.rm = TRUE)
+diff <- income_college - income_noCollege
+
+# Create summary table
+summary_table <- data.frame(
+  Group = c("College Degree", "No College Degree", "Difference"),
+  Average_Income = c(income_college, income_noCollege, diff)
+)
+
+# Display pretty table
+knitr::kable(
+  summary_table,
+  digits = 0,
+  col.names = c("Group", "Average Income")
+)
+
+
+```
+
+<b>(a) Can we interpret raw mean income difference between college and non-college individuals as the causal effect of attending college on income? Why or why not?</b>
+
+No, we cannot interpret the raw mean income difference of `r format(round(diff,0), big.mark=",")` as the causal effect of attending college on income. Individuals who attend college may systematically differ from non-attendees in observable and unobservable characteristics such as ability, motivation, or family background.
+
+These factors affect both college attendance and income, violating the exogeneity assumption $E(u∣college)=0$. Hence, the observed difference reflects both the causal effect of college and selection bias due to omitted variables.
+
+# Question 2: Assignment Mechanism
+
+<b>(a) Decomposition of the Observed Mean Difference into ATET and Selection Bias</b>
+
+A researcher estimates the OLS regression
+
+$$
+income_i = \beta_0 + \beta_1 college_i + u_i
+$$
+
+and obtains $\hat{\beta}_1 > 0$.
+
+We decompose the observed mean difference as follows:
+
+$$
+E(Y_i \mid D_i = 1) - E(Y_i \mid D_i = 0)
+=
+\underbrace{E(Y_{1i} - Y_{0i} \mid D_i = 1)}_{\text{ATET}}
++
+\underbrace{\left[ E(Y_{0i} \mid D_i = 1) - E(Y_{0i} \mid D_i = 0) \right]}_{\text{Selection Bias}}
+$$
+
+<b>(b) Do you think that in this setting $\hat{\beta}_1$ measures the causal effect of interest or is it a biased estimate? Briefly explain your answer.</b>
+
+No, $\hat{\beta}_1$ is likely a biased estimate rather than the causal effect of interest. For a causal interpretation, the exogeneity assumption $E(u \mid college)=0 $
+must hold. However, individuals who attend college may systematically differ from non-attendees in characteristics such as ability, motivation, or family background. Since these factors may affect both college attendance and income, the error term is correlated with the college variable, leading to omitted variable bias and selection bias.
+
+<b>(c) If you think that it is a biased estimate, which variable in the dataset could be a key driver of selection into college? If you think the estimate is correct, skip the following questions.</b>
+
+A potential key driver of selection into college is household income (`hhincome`). Individuals from higher-income households may have better access to education, financial support, and academic opportunities, making them more likely to attend college. At the same time, household income may also be related to future earnings, which can lead to omitted variable bias.
+
+<b>(d) Regression with Observed Controls and Selection-on-Observables</b>
+
+We first estimate the baseline regression:
+
+$$
+income_i = \beta_0 + \beta_1 college_i + u_i
+$$
+```{r baseline regression, include=TRUE}
+model_1 <- felm(income ~ 1 + college, data = df)
+
+summary(model_1, robust = TRUE)
+
+```
+
+We then estimate the controlled regression (control for`hhincome`, `race` and `year`:
+
+$$
+income_i = \beta_0 + \beta_1 college_i + \beta_2 hhincome_i + \beta_3 race_i + \beta_4 year_i + u_i
+$$
+
+
+```{r controlled regression, include=TRUE}
+model_2 <- felm(
+  income ~ 1 + college + hhincome + white + year,
+  data = df
+)
+
+summary(model_2, robust = TRUE)
+```
+
+```{r regression_table, echo=FALSE}
+
+# Baseline regression
+model_1 <- felm(income ~ college, data = df)
+
+# Regression with controls
+model_2 <- felm(
+  income ~ college + hhincome + white + year,
+  data = df
+)
+
+# Create comparison table
+comparison_table <- data.frame(
+  Model = c("Baseline", "With Controls"),
+  College_Coefficient = c(
+    coef(model_1)["college"],
+    coef(model_2)["college"]
+  )
+)
+
+# Display table
+knitr::kable(
+  comparison_table,
+  digits = 3,
+  col.names = c("Model", "Coefficient on College")
+)
+
+```
+
+<b>Does adding these controls address the selection-on-observables concern?</b>
+
+After adding the controls, the estimated coefficient on college decreases from 41.499 in the baseline regression to 28.391 in the controlled regression. This suggests that part of the original income difference was driven by observable characteristics such as household income, race, and year. Therefore, adding these controls helps address selection-on-observables concerns. However, unobserved factors such as ability or motivation may still violate exogeneity, so the coefficient cannot yet be interpreted as fully causal.
+
+<b>(e) Explain why random assignment of scholarship would eliminate the selection bias term from part (a).</b>
+
+Random assignment eliminates selection bias because scholarship amounts are assigned independently of individual characteristics such as ability, motivation, or family background. Therefore, treatment assignment is no longer correlated with omitted factors in the error term. In other words,
+
+$$
+Cov(treatment, u)=0
+$$
+
+and the exogeneity assumption holds. As a result, the selection bias term from part (a) disappears, since treated and untreated individuals are comparable on average. This is why randomized experiments are considered the “gold standard” for causal inference.
+
+<b>(f) Estimate a two-stage least squares model using scholarship as an instrument for college, controlling for household income, race, and year.</b>
+
+We estimate the following first-stage regression:
+
+$$
+college_i = \pi_0 + \pi_1 scholarship_i + \pi_2 hhincome_i + \pi_3 white_i + \pi_4 year_i + e_i
+$$
+
+```{r first_stage, include=TRUE}
+
+first_stage <- felm(
+  college ~ 1 + scholarship + hhincome + white + year,
+  data = df
+)
+
+summary(first_stage, robust = TRUE)
+
+```
+
+We then estimate the two-stage least squares (2SLS) model:
+
+$$
+income_i = \beta_0 + \beta_1 college_i + \beta_2 hhincome_i + \beta_3 white_i + \beta_4 year_i + u_i
+$$
+
+using `scholarship` as an instrument for `college`.
+
+```{r iv_regression, include=TRUE}
+
+iv_model <- felm(
+  income ~ 1 + hhincome + white + year |
+  0 |
+  (college ~ scholarship),
+  data = df
+)
+
+summary(iv_model, robust = TRUE)
+
+```
+
+- **Comment on first stage regression:** The first-stage regression shows that scholarship has a positive and statistically significant effect on college attendance (\(\hat{\pi}_1 = 0.0098\), \(p < 0.001\)). The first-stage F-statistic is 390, which is far above the rule-of-thumb threshold of 10. Therefore, the instrument satisfies the relevance condition, meaning that \(Cov(scholarship, college) \neq 0\).
+
+- **Estimates:** The IV estimate of the effect of college on income is approximately 21.081, compared to the OLS estimate with controls of 28.391. The lower IV estimate suggests that the OLS estimate may have been upward biased due to selection effects.
+
+- **Should the IV estimate be interpreted as causal in this setting?** For the IV estimate to be interpreted causally, the instrument must satisfy the relevance and exogeneity assumptions. The strong first-stage regression suggests that relevance holds, while random assignment of scholarship amounts makes exogeneity plausible.
+
+
+# Question 3: Effect Heterogeneity
+
+**(a) Which coefficient captures the heterogeneous effect, and how is it interpreted? **
+
+We estimate the following interaction model:
+
+$$
+income_i = \beta_0 + \beta_1 college_i + \beta_2 white_i + \beta_3(college_i \times white_i) + u_i
+$$
+
+The heterogeneous effect is captured by the interaction coefficient \(\beta_3\). It measures how the effect of college on income differs between white and non-white individuals. Following Wooldridge’s interpretation of interaction terms, the interaction term implies that the marginal effect of college on income no longer has to be constant across individuals. For non-white individuals (\(white = 0\)), the marginal effect of college is \(\beta_1\), while for white individuals (\(white = 1\)), the marginal effect is \(\beta_1 + \beta_3\).
+
+**(b) Estimate the equation from (a) in R.**
+
+```{r interaction_model, include=TRUE}
+
+interaction_model <- felm(
+  income ~ 1 + college + white + college:white,
+  data = df
+)
+
+summary(interaction_model, robust = TRUE)
+
+```
+
+**(c) Report the marginal effect of college on income separately.**
+
+- If \(white = 0\), the marginal effect of college on income is \(\beta_1 = 38.072\). 
+- If \(white = 1\), the marginal effect is \(\beta_1 + \beta_3 = 38.072 + 1.132 = 39.204\).
+
+**(d) Is the difference in the college income premium across race groups statistically significant? What does this tell us about effect heterogeneity in the return to education?**
+
+- No, the difference in the college income premium across race groups is not statistically significant at conventional significance levels, since the interaction coefficient \(college \times white\) has a \(p\)-value of 0.216.
+
+- Because both `college` and `white` are dummy variables, the interaction term measures the difference in the marginal effect of college on income between white and non-white individuals. The insignificant interaction effect suggests that we do not find strong evidence of effect heterogeneity in the return to education across race groups.
+
+
+# Question 4: Probit and Logit Models
+
+**(a) State one specific limitation of using OLS, when the dependent variable is binary.**
+
+One limitation of using OLS with a binary dependent variable is that the model can predict probabilities below 0 or above 1, which are not meaningful probabilities.
+
+**(b) Estimate a probit and a logit model in R using household income and race as covariates.**
+
+```{r probit_logit_models, include=TRUE}
+
+# Probit model
+probit_model <- glm(
+  college ~ 1 + hhincome + white,
+  family = binomial(link = "probit"),
+  data = df
+)
+
+summary(probit_model)
+
+# Logit model
+logit_model <- glm(
+  college ~ 1 + hhincome + white,
+  family = binomial(link = "logit"),
+  data = df
+)
+
+summary(logit_model)
+
+```
+
+
+| Variable | Probit Model | Logit Model | Statistical Significance |
+|---|---|---|---|
+| `hhincome` | \(>0\) (0.010) | \(>0\) (0.017) | Significant in both models (\(p<0.001,\ \alpha=5\%\)) |
+| `white` | \(<0\) (-0.105) | \(<0\) (-0.185) | Significant in both models (\(p<0.001,\ \alpha=5\%\)) |
+
+
+- **Interpretation:** As shown in the table above, both the probit and logit models agree on the direction of the effects. Household income (`hhincome`) has a positive and statistically significant coefficient in both models, while `white` has a negative and statistically significant coefficient. Because probit and logit are nonlinear models, the coefficients cannot be interpreted directly as marginal effects, since the marginal effects depend on the values of the covariates.
+
+
+# Question 5: Marginal Effects
+
+**(a) Average Partial Effect (APE)**
+
+The Average Partial Effect (APE) of a continuous variable \(x_j\) in a probit model is given by
+
+$$
+\frac{1}{n}
+\sum_{i=1}^{n}
+g\!\left(
+\hat{\beta}_0
++
+\hat{\beta}_1 x_{i1}
++
+\cdots
++
+\hat{\beta}_k x_{ik}
+\right)
+\hat{\beta}_j
+$$
+
+where \(g(\cdot)\) denotes the standard normal density function. The APE measures the average marginal effect of \(x_j\) on the probability \(P(Y=1 \mid X)\) across all observations.
+
+
+**(b) Compute and interpret the APE of `hhincome` from the probit model estimated in 4(b).**
+
+
+```{r probit, include=TRUE}
+
+# Probit model
+avg_slopes(probit_model, variables = "hhincome")
+
+```
+
+The estimated APE of `hhincome` is 0.00316 and is statistically significant (\(p < 0.001,\ \alpha = 5\%\)). This implies that a one-unit increase in household income increases the probability of attending college by approximately 0.316 percentage points on average.
+
+
+**(b) Compute the predicted probability of attending college for an individual with `hhincome` == 80 and `white` == 1.**
+
+```{r probit calc, include=TRUE}
+
+predict(
+  probit_model,
+  newdata = data.frame(hhincome = 80, white = 1),
+  type = "response"
+)
+
+
+```
+
+The predicted probability of attending college for an individual with \(hhincome = 80\) and \(white = 1\) is approximately 74.0%. As expected in a probit model, the predicted probability lies between 0 and 1.
 
