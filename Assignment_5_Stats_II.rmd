@@ -56,7 +56,7 @@ df <- df %>%
   ) %>%
   
 # Remove old variable
-  select(-c(race))
+  select(-race)
 
 # Summarize cleaned data
 skim(df)
@@ -81,7 +81,7 @@ summary_table <- data.frame(
 knitr::kable(
   summary_table,
   digits = 0,
-  col.names = c("Group", "Average Income")
+  col.names = c("Group", "Average Annual Income (USD)")
 )
 
 
@@ -91,8 +91,7 @@ knitr::kable(
 
 No, we cannot interpret the raw mean income difference of `r format(round(diff,0), big.mark=",")` USD as the causal effect of attending college on income. Individuals who attend college may systematically differ from non-attendees in observable and unobservable characteristics such as ability, motivation, or family background.
 
-These factors affect both college attendance and income, violating the exogeneity assumption $E(u∣college)=0$. Hence, the observed difference reflects both the causal effect of college and selection bias due to omitted variables.
-$$\text{Observed Difference} = \text{Causal Effect} + \text{Selection Bias}$$
+These factors affect both college attendance and income, violating the exogeneity assumption $E(u∣college)=0$. Hence, the observed difference reflects both the causal effect of college and selection bias due to omitted variables ($\text{Observed Difference} = \text{Causal Effect} + \text{Selection Bias}$).
 
 # Question 2: Assignment Mechanism
 
@@ -122,8 +121,6 @@ must hold. However, individuals who attend college may systematically differ fro
 <b>(c) If you think that it is a biased estimate, which variable in the dataset could be a key driver of selection into college? If you think the estimate is correct, skip the following questions.</b>
 
 A potential key driver of selection into college is household income (`hhincome`). Individuals from higher-income households may have better access to education, financial support, and academic opportunities, making them more likely to attend college. At the same time, household income may also be related to future earnings, which can lead to omitted variable bias.
-
-(Race (`race`) could also be a potential driver, since it can be correlated with educational opportunity and earnings.)
 
 <b>(d) Regression with Observed Controls and Selection-on-Observables</b>
 
@@ -186,14 +183,14 @@ knitr::kable(
 
 <b>Does adding these controls address the selection-on-observables concern?</b>
 
-Adding controls reduces the college coefficient from 41.499 to 28.391, indicating that part of the baseline estimate was driven by observable characteristics, wealthier and differently-composed groups are both more likely to attend college and earn more. However, adding controls only removes selection bias under the Conditional Independence Assumption (CIA), which requires that all relevant characteristics are observed and included. Since unobservable factors such as ability or motivation likely affect both college attendance and income, the CIA is implausible here, and the controlled OLS estimate still cannot be interpreted as causal.
+After adding the controls, the estimated coefficient on college decreases from 41.499 in the baseline regression to 28.391 in the controlled regression. This suggests that part of the original income difference was driven by observable characteristics such as household income, race, and year. Therefore, adding these controls helps address selection-on-observables concerns. However, unobserved factors such as ability or motivation may still violate exogeneity, so the coefficient cannot yet be interpreted as fully causal.
 
 <b>(e) Explain why random assignment of scholarship would eliminate the selection bias term from part (a).</b>
 
-Random assignment eliminates selection bias because scholarship amounts are assigned independently of individual characteristics such as ability, motivation, or family background. Therefore, treatment assignment is no longer correlated with omitted factors in the error term. In other words,
+Random assignment eliminates selection bias because scholarship amounts are assigned independently of individual characteristics such as ability, motivation, or family background. Therefore, scholarship assignment is no longer correlated with omitted factors in the error term. In other words,
 
 $$
-Cov(treatment, u)=0
+Cov(\text{scholarship}, u)=0
 $$
 
 and the exogeneity assumption holds. As a result, the selection bias term from part (a) disappears, since treated and untreated individuals are comparable on average.
@@ -242,7 +239,7 @@ summary(iv_model, robust = TRUE)
 
 - **Estimates:** The IV estimate of the effect of college on income is approximately 21.081, compared to the OLS estimate with controls of 28.391. The lower IV estimate suggests that the OLS estimate may have been upward biased due to selection effects.
 
-- **Should the IV estimate be interpreted as causal in this setting?** If scholarship is randomly assigned, the exogeneity assumption $Cov(scholarship,u)=0$ is plausible, and relevance is confirmed by the strong first stage. However, the exclusion restriction must also hold, scholarship should affect income only through college attendance, not directly. Under these conditions, the IV estimate can be interpreted as causal.
+- **Should the IV estimate be interpreted as causal in this setting?** For the IV estimate to be interpreted causally, the instrument must satisfy the relevance and exogeneity assumptions. If scholarship is randomly assigned, the exogeneity assumption $Cov(scholarship,u)=0$ is plausible, while the first-stage results indicate that the instrument is relevant. Under these conditions, the IV estimate can be interpreted as causal.
 
 
 # Question 3: Effect Heterogeneity
@@ -277,7 +274,7 @@ summary(interaction_model, robust = TRUE)
 
 **(d) Is the difference in the college income premium across race groups statistically significant? What does this tell us about effect heterogeneity in the return to education?**
 
-- No, the difference in the college income premium across race groups is not statistically significant at conventional significance levels, since the interaction coefficient $(\text{college}_i \times \text{white}_i)$ has a $(p)$-value of 0.216.
+- No, the difference in the college income premium across race groups is not statistically significant at conventional significance levels (\( \alpha = 5\% \)), since the interaction coefficient $(\text{college}_i \times \text{white}_i)$ has a $(p)$-value of 0.216.
 
 - Because both `college` and `white` are dummy variables, the interaction term measures the difference in the marginal effect of college on income between white and non-white individuals. The insignificant interaction effect suggests that we do not find strong evidence of effect heterogeneity in the return to education across race groups.
 
@@ -286,7 +283,7 @@ summary(interaction_model, robust = TRUE)
 
 **(a) State one specific limitation of using OLS, when the dependent variable is binary.**
 
-One limitation of using OLS with a binary dependent variable is that it can predict values below 0 or above 1 — these fall outside the valid $[0,1]$ probability range and cannot be interpreted as meaningful probabilities.
+One limitation of using OLS with a binary dependent variable is that it can predict values below 0 or above 1, these fall outside the valid $[0,1]$ probability range and cannot be interpreted as meaningful probabilities.
 
 **(b) Estimate a probit and a logit model in R using household income and race as covariates.**
 
@@ -319,7 +316,7 @@ summary(logit_model)
 | `white` | \(<0\) (-0.105) | \(<0\) (-0.185) | Significant in both models (\(p<0.001,\ \alpha=5\%\)) |
 
 
-- **Interpretation:** Both the probit and logit models agree on the direction of all effects. `hhincome` has a positive and statistically significant coefficient in both models ($p<0.001$), indicating that higher household income increases the predicted probability of college attendance. `white` has a negative and statistically significant coefficient ($p<0.001$), suggesting that individuals in race group 1 are less likely to attend college, conditional on household income. Since probit and logit are nonlinear models, the raw coefficients cannot be interpreted as marginal effects, their magnitude depends on the values of all covariates.
+- **Interpretation:** Both the probit and logit models agree on the direction and statistical significance of the effects. `hhincome` has a positive and statistically significant coefficient in both models ($p<0.001$), while `white` has a negative and statistically significant coefficient ($p<0.001$), conditional on household income. Since probit and logit are nonlinear models, the coefficients cannot be interpreted directly as marginal effects. While the direction of the effects is identified (e.g. `hhincome` is associated with a higher probability of attending college), the size (magnitude) of the effect depends on the values of the covariates and must be calculated separately.
 
 
 # Question 5: Marginal Effects
