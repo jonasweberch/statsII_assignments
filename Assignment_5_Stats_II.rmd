@@ -77,11 +77,12 @@ summary_table <- data.frame(
   Average_Income = c(income_college, income_noCollege, diff)
 )
 
-# Display pretty table
+# Display table
 knitr::kable(
   summary_table,
   digits = 0,
-  col.names = c("Group", "Average Annual Income (USD)")
+  col.names = c("Group", "Average Income (USD)"),
+  format.args = list(big.mark = ",")
 )
 
 
@@ -91,7 +92,7 @@ knitr::kable(
 
 No, we cannot interpret the raw mean income difference of `r format(round(diff,0), big.mark=",")` USD as the causal effect of attending college on income. Individuals who attend college may systematically differ from non-attendees in observable and unobservable characteristics such as ability, motivation, or family background.
 
-These factors affect both college attendance and income, violating the exogeneity assumption $E(u∣college)=0$. Hence, the observed difference reflects both the causal effect of college and selection bias due to omitted variables ($\text{Observed Difference} = \text{Causal Effect} + \text{Selection Bias}$).
+These factors affect both college attendance and income, violating the exogeneity assumption $E(u∣college)=0$. Hence, the observed difference reflects both the causal effect of college and selection bias due to omitted variables. $$\text{Observed Difference} = \text{Causal Effect} + \text{Selection Bias}$$.
 
 # Question 2: Assignment Mechanism
 
@@ -369,5 +370,5 @@ predict(
 
 ```
 
-The predicted probability of attending college for an individual with \(hhincome = 80\) and \(white = 1\) is approximately 74.0%. As expected in a probit model, the predicted probability lies between 0 and 1.
+The predicted probability of attending college for an individual with (`hhincome` = 80) and (`white` = 1) is approximately 74.0%. As expected in a probit model, the predicted probability lies between 0 and 1.
 
